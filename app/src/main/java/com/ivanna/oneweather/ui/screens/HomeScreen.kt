@@ -1,5 +1,6 @@
 package com.ivanna.oneweather.ui.screens
 
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -9,6 +10,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -44,17 +46,14 @@ fun HomeScreen(
         mutableStateOf(longitude)
     }
 
-    // Menyimpan nama kota yang sedang ditampilkan
     var displayedCityName by remember(cityName) {
         mutableStateOf(cityName)
     }
 
-    // Repository untuk mendapatkan nama kota dari koordinat
     val reverseGeocodingRepository = remember {
         ReverseGeocodingRepository()
     }
 
-    // Mengambil data cuaca berdasarkan koordinat
     LaunchedEffect(currentLatitude, currentLongitude) {
         weatherViewModel.loadWeather(
             currentLatitude,
@@ -62,7 +61,6 @@ fun HomeScreen(
         )
     }
 
-    // Mengambil nama kota berdasarkan koordinat
     LaunchedEffect(currentLatitude, currentLongitude) {
         val result = reverseGeocodingRepository.getCityName(
             currentLatitude,
@@ -79,6 +77,7 @@ fun HomeScreen(
         contentPadding = PaddingValues(20.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
+
         item {
             Column {
                 Text(
@@ -141,7 +140,6 @@ fun HomeScreen(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Tombol memperbarui data cuaca
                 Button(
                     onClick = {
                         weatherViewModel.loadWeather(
@@ -161,7 +159,6 @@ fun HomeScreen(
                     )
                 }
 
-                // Waktu terakhir data cuaca berhasil diperbarui
                 uiState.lastUpdated?.let { time ->
                     Spacer(modifier = Modifier.height(8.dp))
 
@@ -188,86 +185,126 @@ fun HomeScreen(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                when {
-                    uiState.isLoading -> {
-                        CircularProgressIndicator()
+                if (uiState.isLoading && uiState.weather == null) {
+                    CircularProgressIndicator()
 
-                        Text(
-                            text = if (isEnglish) {
-                                "Loading weather data..."
-                            } else {
-                                "Memuat data cuaca..."
-                            },
-                            color = colors.onSurface
+                    Text(
+                        text = if (isEnglish) {
+                            "Loading weather data..."
+                        } else {
+                            "Memuat data cuaca..."
+                        },
+                        color = colors.onSurface
+                    )
+                }
+
+                if (uiState.error != null) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = colors.errorContainer
                         )
-                    }
-
-                    uiState.error != null -> {
-                        Text(
-                            text = uiState.error ?: if (isEnglish) {
-                                "An error occurred"
-                            } else {
-                                "Terjadi kesalahan"
-                            },
-                            color = colors.error
-                        )
-
-                        Button(
-                            onClick = {
-                                weatherViewModel.loadWeather(
-                                    currentLatitude,
-                                    currentLongitude
-                                )
-                            }
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                if (isEnglish) "Try Again" else "Coba Lagi"
+                                text = "⚠️",
+                                fontSize = 28.sp
                             )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Text(
+                                text = if (isEnglish) {
+                                    "Unable to update weather"
+                                } else {
+                                    "Gagal memperbarui cuaca"
+                                },
+                                fontWeight = FontWeight.Bold,
+                                color = colors.onErrorContainer
+                            )
+
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            Text(
+                                text = uiState.error ?: "",
+                                color = colors.onErrorContainer,
+                                fontSize = 13.sp
+                            )
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            Button(
+                                onClick = {
+                                    weatherViewModel.loadWeather(
+                                        currentLatitude,
+                                        currentLongitude
+                                    )
+                                },
+                                enabled = !uiState.isLoading
+                            ) {
+                                Text(
+                                    if (isEnglish) "Try Again" else "Coba Lagi"
+                                )
+                            }
                         }
                     }
+                }
 
-                    uiState.weather != null -> {
-                        val current = uiState.weather!!.current
+                if (uiState.isLoading && uiState.weather != null) {
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
 
-                        WeatherIcon(
-                            weatherCode = current.weatherCode,
-                            isDay = current.isDay == 1,
-                            fontSize = 76.sp
-                        )
+                uiState.weather?.let { weather ->
+                    val current = weather.current
 
-                        Text(
-                            text = "${current.temperature.toInt()}°",
-                            fontSize = 76.sp,
-                            fontWeight = FontWeight.Light,
-                            color = colors.onBackground
-                        )
+                    AnimatedWeatherIcon(
+                        weatherCode = current.weatherCode,
+                        isDay = current.isDay == 1,
+                        fontSize = 76.sp
+                    )
 
-                        Text(
-                            text = getWeatherDescription(
-                                current.weatherCode,
-                                isEnglish
-                            ),
-                            fontSize = 19.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = colors.onSurface
-                        )
+                    Text(
+                        text = "${current.temperature.toInt()}°",
+                        fontSize = 76.sp,
+                        fontWeight = FontWeight.Light,
+                        color = colors.onBackground
+                    )
 
-                        Text(
-                            text = if (isEnglish) {
-                                "Feels like ${current.feelsLike.toInt()}°C"
-                            } else {
-                                "Terasa seperti ${current.feelsLike.toInt()}°C"
-                            },
-                            color = colors.onSurfaceVariant,
-                            fontSize = 14.sp
-                        )
-                    }
+                    Text(
+                        text = getWeatherDescription(
+                            current.weatherCode,
+                            isEnglish
+                        ),
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = colors.onSurface
+                    )
+
+                    Text(
+                        text = if (isEnglish) {
+                            "Feels like ${current.feelsLike.toInt()}°C"
+                        } else {
+                            "Terasa seperti ${current.feelsLike.toInt()}°C"
+                        },
+                        color = colors.onSurfaceVariant,
+                        fontSize = 14.sp
+                    )
                 }
             }
         }
 
-        if (uiState.weather != null) {
-            val current = uiState.weather!!.current
+        uiState.weather?.let { weather ->
+            val current = weather.current
+            val hourly = weather.hourly
+            val daily = weather.daily
 
             item {
                 Row(
@@ -275,21 +312,13 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     WeatherInfoCard(
-                        title = if (isEnglish) {
-                            "Humidity"
-                        } else {
-                            "Kelembapan"
-                        },
+                        title = if (isEnglish) "Humidity" else "Kelembapan",
                         value = "${current.humidity}%",
                         modifier = Modifier.weight(1f)
                     )
 
                     WeatherInfoCard(
-                        title = if (isEnglish) {
-                            "Wind Speed"
-                        } else {
-                            "Kecepatan Angin"
-                        },
+                        title = if (isEnglish) "Wind Speed" else "Kecepatan Angin",
                         value = "${current.windSpeed} km/h",
                         modifier = Modifier.weight(1f)
                     )
@@ -297,12 +326,115 @@ fun HomeScreen(
             }
 
             item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    WeatherInfoCard(
+                        title = if (isEnglish) "Wind Direction" else "Arah Angin",
+                        value = getWindDirection(
+                            current.windDirection,
+                            isEnglish
+                        ),
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    WeatherInfoCard(
+                        title = if (isEnglish) "Wind Gusts" else "Hembusan Angin",
+                        value = String.format(
+                            Locale.US,
+                            "%.1f km/h",
+                            current.windGusts
+                        ),
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            item {
+                val uvLevel = when {
+                    current.uvIndex < 3 -> if (isEnglish) "Low" else "Rendah"
+                    current.uvIndex < 6 -> if (isEnglish) "Moderate" else "Sedang"
+                    current.uvIndex < 8 -> if (isEnglish) "High" else "Tinggi"
+                    current.uvIndex < 11 -> if (isEnglish) "Very High" else "Sangat Tinggi"
+                    else -> if (isEnglish) "Extreme" else "Ekstrem"
+                }
+
+                WeatherInfoCard(
+                    title = if (isEnglish) "UV Index" else "Indeks UV",
+                    value = "${String.format(Locale.US, "%.1f", current.uvIndex)} • $uvLevel",
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            item {
+                WeatherInfoCard(
+                    title = if (isEnglish) "Atmospheric Pressure" else "Tekanan Udara",
+                    value = "${current.pressureMsl.toInt()} hPa",
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            item {
+                val visibilityIndex = hourly.time.indexOfFirst {
+                    it >= current.time
+                }.let {
+                    if (it >= 0) it else 0
+                }
+
+                if (visibilityIndex < hourly.visibility.size &&
+                    hourly.visibility.isNotEmpty()
+                ) {
+                    WeatherInfoCard(
+                        title = if (isEnglish) "Visibility" else "Jarak Pandang",
+                        value = String.format(
+                            Locale.US,
+                            "%.1f km",
+                            hourly.visibility[visibilityIndex] / 1000.0
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+
+            item {
+                val rainIndex = hourly.time.indexOfFirst {
+                    it >= current.time
+                }.let {
+                    if (it >= 0) it else 0
+                }
+
+                if (rainIndex < hourly.precipitationProbability.size &&
+                    rainIndex < hourly.precipitation.size &&
+                    hourly.precipitationProbability.isNotEmpty() &&
+                    hourly.precipitation.isNotEmpty()
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        WeatherInfoCard(
+                            title = if (isEnglish) "Rain Probability" else "Peluang Hujan",
+                            value = "${hourly.precipitationProbability[rainIndex]}%",
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        WeatherInfoCard(
+                            title = if (isEnglish) "Precipitation" else "Curah Hujan",
+                            value = String.format(
+                                Locale.US,
+                                "%.1f mm",
+                                hourly.precipitation[rainIndex]
+                            ),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+
+            item {
                 Text(
-                    text = if (isEnglish) {
-                        "Hourly Forecast"
-                    } else {
-                        "Prakiraan Per Jam"
-                    },
+                    text = if (isEnglish) "Hourly Forecast" else "Prakiraan Per Jam",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = colors.onBackground
@@ -310,8 +442,6 @@ fun HomeScreen(
             }
 
             item {
-                val hourly = uiState.weather!!.hourly
-
                 val hourlyCount = minOf(
                     24,
                     hourly.time.size,
@@ -363,16 +493,36 @@ fun HomeScreen(
                                     fontSize = 11.sp,
                                     color = colors.onSurfaceVariant
                                 )
+
+                                if (index < hourly.precipitationProbability.size) {
+                                    Spacer(modifier = Modifier.height(6.dp))
+
+                                    Text(
+                                        text = "☔ ${hourly.precipitationProbability[index]}%",
+                                        fontSize = 12.sp,
+                                        color = colors.primary,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+
+                                if (index < hourly.precipitation.size) {
+                                    Text(
+                                        text = String.format(
+                                            Locale.US,
+                                            "%.1f mm",
+                                            hourly.precipitation[index]
+                                        ),
+                                        fontSize = 11.sp,
+                                        color = colors.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
 
-            // Grafik perubahan suhu
             item {
-                val hourly = uiState.weather!!.hourly
-
                 val chartCount = minOf(
                     24,
                     hourly.time.size,
@@ -396,20 +546,24 @@ fun HomeScreen(
 
             item {
                 Text(
-                    text = if (isEnglish) {
-                        "7-Day Forecast"
-                    } else {
-                        "Prakiraan 7 Hari"
-                    },
+                    text = if (isEnglish) "7-Day Forecast" else "Prakiraan 7 Hari",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = colors.onBackground
                 )
             }
 
-            itemsIndexed(uiState.weather!!.daily.time) { index, date ->
-                val daily = uiState.weather!!.daily
+            val dailyCount = minOf(
+                7,
+                daily.time.size,
+                daily.weatherCode.size,
+                daily.temperatureMax.size,
+                daily.temperatureMin.size,
+                daily.sunrise.size,
+                daily.sunset.size
+            )
 
+            itemsIndexed(daily.time.take(dailyCount)) { index, date ->
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(18.dp),
@@ -443,17 +597,13 @@ fun HomeScreen(
                             )
 
                             Text(
-                                text = "🌅 ${
-                                    if (isEnglish) "Sunrise" else "Terbit"
-                                }: ${daily.sunrise[index].substringAfter("T")}",
+                                text = "🌅 ${if (isEnglish) "Sunrise" else "Terbit"}: ${daily.sunrise[index].substringAfter("T")}",
                                 fontSize = 11.sp,
                                 color = colors.onSurfaceVariant
                             )
 
                             Text(
-                                text = "🌇 ${
-                                    if (isEnglish) "Sunset" else "Terbenam"
-                                }: ${daily.sunset[index].substringAfter("T")}",
+                                text = "🌇 ${if (isEnglish) "Sunset" else "Terbenam"}: ${daily.sunset[index].substringAfter("T")}",
                                 fontSize = 11.sp,
                                 color = colors.onSurfaceVariant
                             )
@@ -473,6 +623,93 @@ fun HomeScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun AnimatedWeatherIcon(
+    weatherCode: Int,
+    isDay: Boolean = true,
+    fontSize: androidx.compose.ui.unit.TextUnit
+) {
+    val isRainy = weatherCode in 51..67 ||
+            weatherCode in 80..82 ||
+            weatherCode in 95..99
+
+    val isCloudy = weatherCode in 1..3 ||
+            weatherCode == 45 ||
+            weatherCode == 48
+
+    val infiniteTransition = rememberInfiniteTransition(
+        label = "weather_animation"
+    )
+
+    val animatedScale by infiniteTransition.animateFloat(
+        initialValue = 0.94f,
+        targetValue = 1.06f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = 1600,
+                easing = FastOutSlowInEasing
+            ),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "weather_scale"
+    )
+
+    val animatedOffsetX by infiniteTransition.animateFloat(
+        initialValue = -5f,
+        targetValue = 5f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = 2200,
+                easing = FastOutSlowInEasing
+            ),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "weather_horizontal"
+    )
+
+    val animatedOffsetY by infiniteTransition.animateFloat(
+        initialValue = if (isRainy) 0f else -5f,
+        targetValue = if (isRainy) 8f else 5f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = if (isRainy) 700 else 1800,
+                easing = FastOutSlowInEasing
+            ),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "weather_vertical"
+    )
+
+    val animatedModifier = when {
+        isRainy -> Modifier.graphicsLayer {
+            translationY = animatedOffsetY
+        }
+
+        isCloudy -> Modifier.graphicsLayer {
+            translationX = animatedOffsetX
+        }
+
+        else -> Modifier.graphicsLayer {
+            scaleX = animatedScale
+            scaleY = animatedScale
+            translationY = animatedOffsetY
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(animatedModifier),
+        contentAlignment = Alignment.Center
+    ) {
+        WeatherIcon(
+            weatherCode = weatherCode,
+            isDay = isDay,
+            fontSize = fontSize
+        )
     }
 }
 
@@ -510,6 +747,40 @@ fun WeatherInfoCard(
             )
         }
     }
+}
+
+fun getWindDirection(
+    degrees: Int,
+    isEnglish: Boolean = false
+): String {
+    val directions = if (isEnglish) {
+        listOf(
+            "North",
+            "Northeast",
+            "East",
+            "Southeast",
+            "South",
+            "Southwest",
+            "West",
+            "Northwest"
+        )
+    } else {
+        listOf(
+            "Utara",
+            "Timur Laut",
+            "Timur",
+            "Tenggara",
+            "Selatan",
+            "Barat Daya",
+            "Barat",
+            "Barat Laut"
+        )
+    }
+
+    val normalizedDegrees = ((degrees % 360) + 360) % 360
+    val directionIndex = ((normalizedDegrees + 22) / 45) % 8
+
+    return directions[directionIndex]
 }
 
 fun getWeatherDescription(
