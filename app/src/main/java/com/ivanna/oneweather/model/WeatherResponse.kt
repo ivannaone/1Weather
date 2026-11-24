@@ -35,7 +35,22 @@ data class CurrentWeather(
     val weatherCode: Int,
 
     @SerializedName("wind_speed_10m")
-    val windSpeed: Double
+    val windSpeed: Double,
+
+    @SerializedName("uv_index")
+    val uvIndex: Double,
+
+    @SerializedName("precipitation")
+    val precipitation: Double,
+
+    @SerializedName("pressure_msl")
+    val pressureMsl: Double,
+
+    @SerializedName("wind_direction_10m")
+    val windDirection: Int,
+
+    @SerializedName("wind_gusts_10m")
+    val windGusts: Double
 )
 
 data class HourlyWeather(
@@ -45,7 +60,16 @@ data class HourlyWeather(
     val temperature: List<Double>,
 
     @SerializedName("weather_code")
-    val weatherCode: List<Int>
+    val weatherCode: List<Int>,
+
+    @SerializedName("precipitation_probability")
+    val precipitationProbability: List<Int>,
+
+    @SerializedName("precipitation")
+    val precipitation: List<Double>,
+
+    @SerializedName("visibility")
+    val visibility: List<Double>
 )
 
 data class DailyWeather(

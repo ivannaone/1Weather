@@ -2,6 +2,7 @@ package com.ivanna.oneweather.repository
 
 import com.ivanna.oneweather.data.remote.WeatherApiClient
 import com.ivanna.oneweather.model.WeatherResponse
+import kotlinx.coroutines.CancellationException
 
 class WeatherRepository {
 
@@ -19,6 +20,9 @@ class WeatherRepository {
             )
 
             Result.success(response)
+
+        } catch (e: CancellationException) {
+            throw e
 
         } catch (e: Exception) {
             Result.failure(e)
