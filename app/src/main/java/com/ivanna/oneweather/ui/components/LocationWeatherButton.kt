@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Looper
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -30,103 +31,133 @@ fun LocationWeatherButton(
     var isLoading by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
 
+    fun showError() {
+        isLoading = false
+        message = if (isEnglish) {
+            "Unable to get your location. Check GPS and try again."
+        } else {
+            "Lokasi tidak ditemukan. Periksa GPS dan coba lagi."
+        }
+    }
+
+    fun useLocation(location: Location) {
+        isLoading = false
+        message = ""
+        onLocationFound(location.latitude, location.longitude)
+    }
+
     fun getDeviceLocation() {
         val locationManager =
             context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
 
         try {
-            val provider = when {
-                locationManager.isProviderEnabled(
-                    LocationManager.NETWORK_PROVIDER
-                ) -> LocationManager.NETWORK_PROVIDER
-
-                locationManager.isProviderEnabled(
-                    LocationManager.GPS_PROVIDER
-                ) -> LocationManager.GPS_PROVIDER
-
-                else -> null
+            val providers = listOf(
+                LocationManager.NETWORK_PROVIDER,
+                LocationManager.GPS_PROVIDER
+            ).filter { provider ->
+                locationManager.isProviderEnabled(provider)
             }
 
-            if (provider == null) {
+            if (providers.isEmpty()) {
                 isLoading = false
                 message = if (isEnglish) {
-                    "Please enable location services"
+                    "Please enable location services on your phone."
                 } else {
-                    "Aktifkan layanan lokasi terlebih dahulu"
+                    "Aktifkan layanan lokasi di HP terlebih dahulu."
                 }
                 return
             }
 
-            val lastLocation = locationManager.getLastKnownLocation(provider)
+            val lastLocation = providers
+                .mapNotNull { provider ->
+                    locationManager.getLastKnownLocation(provider)
+                }
+                .filter { location ->
+                    System.currentTimeMillis() - location.time in 0..120000
+                }
+                .maxByOrNull { it.time }
 
             if (lastLocation != null) {
-                isLoading = false
-                message = ""
-                onLocationFound(
-                    lastLocation.latitude,
-                    lastLocation.longitude
-                )
+                useLocation(lastLocation)
                 return
             }
 
-            locationManager.requestSingleUpdate(
-                provider,
-                object : LocationListener {
-                    override fun onLocationChanged(location: Location) {
-                        isLoading = false
-                        message = ""
+            fun requestProvider(index: Int) {
+                if (index >= providers.size) {
+                    showError()
+                    return
+                }
 
-                        onLocationFound(
-                            location.latitude,
-                            location.longitude
-                        )
+                val provider = providers[index]
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    locationManager.getCurrentLocation(
+                        provider,
+                        null,
+                        ContextCompat.getMainExecutor(context)
+                    ) { location ->
+                        if (location != null) {
+                            useLocation(location)
+                        } else {
+                            requestProvider(index + 1)
+                        }
                     }
+                } else {
+                    @Suppress("DEPRECATION")
+                    locationManager.requestSingleUpdate(
+                        provider,
+                        object : LocationListener {
+                            override fun onLocationChanged(location: Location) {
+                                useLocation(location)
+                            }
 
-                    override fun onProviderEnabled(provider: String) {}
+                            override fun onProviderEnabled(provider: String) {}
 
-                    override fun onProviderDisabled(provider: String) {}
+                            override fun onProviderDisabled(provider: String) {}
 
-                    @Deprecated("Deprecated in Android")
-                    override fun onStatusChanged(
-                        provider: String?,
-                        status: Int,
-                        extras: Bundle?
-                    ) {}
-                },
-                Looper.getMainLooper()
-            )
+                            @Deprecated("Deprecated in Android")
+                            override fun onStatusChanged(
+                                provider: String?,
+                                status: Int,
+                                extras: Bundle?
+                            ) {}
+                        },
+                        Looper.getMainLooper()
+                    )
+                }
+            }
+
+            requestProvider(0)
+
         } catch (e: SecurityException) {
             isLoading = false
             message = if (isEnglish) {
-                "Location permission is required"
+                "Location permission is required."
             } else {
-                "Izin lokasi diperlukan"
+                "Izin lokasi diperlukan."
             }
         } catch (e: Exception) {
-            isLoading = false
-            message = if (isEnglish) {
-                "Failed to get device location"
-            } else {
-                "Gagal mendapatkan lokasi perangkat"
-            }
+            showError()
         }
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        val granted =
-            permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
-                    permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        val fineGranted =
+            permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
 
-        if (granted) {
+        val coarseGranted =
+            permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+
+        if (fineGranted || coarseGranted) {
             getDeviceLocation()
         } else {
             isLoading = false
             message = if (isEnglish) {
-                "Location permission denied"
+                "Location permission denied."
             } else {
-                "Izin lokasi ditolak"
+                "Izin lokasi ditolak."
             }
         }
     }
